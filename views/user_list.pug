@@ -1,0 +1,198 @@
+extends layout
+
+block content
+  script.
+    $(function () {
+      $('[id^=editglyph_]').click(function () { // function to run when edit icon is clicked
+        var row = $(this).closest("tr").index(); // extracting row value where edit icon was clicked
+        var token = '#{token}'; // extracting token value for communicating with the database via ajax
+        $(this).hide(); // hiding the edit icon
+        $("#saveglyph_"+row).show(); // displaying the save icon
+        // Storing original values of the cells
+        var originalName = $("#name_"+row).text(); // storing original value in name field
+        var originalMobile = $("#mobile_"+row).text(); // storing original value in mobile field
+        var originalAuth = ""; 
+        $("#authorities_"+row+" li").each(function(i, li){originalAuth+=$(li).text()+",";}); // storing original authorities in an array
+        originalAuth = originalAuth.slice(0,-1); // removing the , which would be there as last characted
+        var originalSu = $("#su_"+row).text(); // storing the admin status
+        // Setting properties of name cell as an input text field
+        $("#name_"+row).addClass("cellEditing");
+        $("#name_"+row).css("color", "#000000");
+        $("#name_"+row).html("<input type='text' id=edit_name_" + row + " value='" + originalName + "' />"); 
+        $("#name_"+row).children().first().focus(); // setting the cursor on the name cell after edit icon is clicked
+        // Setting properties of mobile number field now
+        $("#mobile_"+row).addClass("cellEditing");
+        $("#mobile_"+row).css("color", "#000000");
+        $("#mobile_"+row).html("<input type='text' id=edit_mobile_" + row + " value='" + originalMobile + "' />"); 
+        // Setting properties of the authorities cell as a checkbox collection of available authorities
+        $("#authorities_"+row).addClass("cellEditing");
+        $("#authorities_"+row).css("color", "#000000");
+        // get authorities list from the database to be displayed in each checkbox
+        $.get("/db/authorities?token="+token+"&type=json", function(data, status){
+          var html = "<div id=\"authorities_container_" + row + "\">";
+          $.each(data, function(index, value){
+            if(originalAuth.includes(value.name)){ // checkboxes corresponding to original authorities of the user should appear as checked
+              html = html + "<input type=\"checkbox\" value=\"" + value._id + "\" name = \"" + value.name + "\" checked/> "+value.name+"<br />"; 
+            }else{ // checkboxes corresponding to authorities which are not the original authorities of the user should appear as unchecked
+              html = html + "<input type=\"checkbox\" value=\"" + value._id + "\" name = \"" + value.name + "\" /> "+value.name+"<br />"; 
+            }
+          });
+          html = html + "</div>"
+          $("#authorities_"+row).html(html); // setting the display
+        });
+        // Setting properties of the admin cell. It should show a radio button group to select from
+        $("#su_"+row).addClass("cellEditing");
+        $("#su_"+row).css("color", "#000000");
+        if (originalSu === 'true'){ // then by default true should appear as checked
+          $("#su_"+row).html("<input type='radio' name='admin_" + row + "' value='true' checked> true <br> <input type='radio' name='admin_" + row + "' value='false'> false");
+        } else{ // then by default false should appear as checked
+          $("#su_"+row).html("<input type='radio' name='admin_" + row + "' value='true'> true <br> <input type='radio' name='admin_" + row + "' value='false' checked> false");
+        }
+      });
+    });
+    $(function(){
+      $('[id^=saveglyph_]').click(function () { // function to run when save icon is clicked
+        var row = $(this).closest("tr").index(); // first we get the corresponding row value
+        var token = '#{token}'; // Getting token for database operations
+        $(this).hide(); // hiding save icon
+        $("#editglyph_"+row).show(); // displaying the edit icon
+        var user_id = $("#id_"+row).text(); // Getting user id for database operations
+        var user_name = $("#edit_name_"+row).val(); // Getting user name for database operations 
+        var user_mobile = $("#edit_mobile_"+row).val(); // Getting user mobile no for database operations 
+        // Setting properties of the name and mobile number cell to original table cell format containing updated values
+        $("#name_"+row).removeClass("cellEditing");
+        $("#mobile_"+row).removeClass("cellEditing");
+        $("#name_"+row).css({"color":"#ffffff"});
+        $("#mobile_"+row).css({"color":"#ffffff"});
+        $("#name_"+row).html("<td id=name_" + row + ">"+ user_name+"</td>");
+        $("#mobile_"+row).html("<td id=mobile_" + row + ">"+ user_mobile+"</td>");
+        // Setting properties of authorities cell to original table cell format containing updated values
+        var auth_list = $("#authorities_container_" + row + " :checkbox:checked").map(function(){
+          return $(this).val();
+        }).toArray(); // first capturing all selected authorities in an array called auth_list       
+        var auth_name_list = $("#authorities_container_" + row + " :checkbox:checked").map(function(){
+          return $(this).attr("name");
+        }).toArray(); // first capturing all selected authorities in an array called auth_list       
+        // Now setting back the authorities cell to original look
+        $("#authorities_"+row).removeClass("cellEditing");
+        $("#authorities_"+row).css({"color":"#ffffff"});
+        var html = "<td id=\"authorities_" + row + "\"><ul>";
+        jQuery.each(auth_name_list, function(index, value){
+          html = html + " <li>"+value;
+        }); // displaying each selected authority as a list item
+        html = html + " </ul></td>"
+        $("#authorities_"+row).html(html); // now the authorities cell has been setup and values extracted
+        // time to set the admin status cell
+        var admin_status = $("input[name=admin_" + row + "]:checked").val(); // storing the value of the checked radio button
+        $("#su_"+row).removeClass("cellEditing");
+        $("#su_"+row).css({"color":"#ffffff"});
+        $("#su_"+row).html("<td id=\"su_"+row+"\">" + admin_status + "</td>"); // setting the cell html
+        // Now we have all the values to do a database operation.
+        var url = "/db/users/edit?token=" + token; // constructing the url for post operation
+        var params = {"token": token, "userId": user_id, "userName": user_name, "userMobile":user_mobile, "authorities": auth_list.toString(), "superadmin": admin_status}; // constructing the params for post operation
+        $.post(url, params, function(data, status){
+          alert(data);
+        });
+      });
+    });
+    $(function(){
+      $('[id^=deleteglyph_]').click(function () { // function to run when delete icon is clicked
+        var row = $(this).closest("tr").index(); // first we get the corresponding row value
+        var token = '#{token}'; // Getting token for database operations
+        var user_id = $("#id_"+row).text(); // Getting user id for database operations
+        // Now we have all required variables. We can delete the user via ajax call
+        var url = "/db/users/delete?token=" + token; // constructing the url for the post call
+        var params = {"token": token, "userId": user_id}; // constructing the params for the post call
+        $.post(url, params, function(data, status){
+          // This code will be executed when the delete is successful. Simply hide the row
+          $("#tr_"+row).hide();
+        })
+      });
+    });
+    $(function(){
+      $("#cb_all").click(function(){ // function to implement the select all feature
+        $(".cb").prop('checked', $(this).prop('checked'));
+      });
+    });
+    $(function(){
+      $("#addglyph").click(function(){ // function to implement the add user feature
+        var token = '#{token}'; // extracting token value for communicating with the database via ajax
+        var html = "<form id=\"addUserForm\" method=\"POST\" action=\"/db/users/create?token=" + token + "\"><h3>New User Registration Form</h3> <hr/><br/> <label>Name : </label> <input type=\"text\" id=\"name\" placeholder=\"Ex -John Smith\"/><br/> <br/> <label>Mobile No. : </label> <input type=\"text\" id=\"mobile\" placeholder=\"9999999999\"/><br/>";
+        // get authorities list from the database to be displayed in each checkbox
+        $.get("/db/authorities?token="+token+"&type=json", function(data, status){
+          html = html + "<div id=\"authorities_container\"> <label> Authorities : </label>";
+          $.each(data, function(index, value){
+              html = html + "<input type=\"checkbox\" value=\"" + value._id + "\" name = \"" + value.name + "\" /> " + value.name; 
+          });
+        html = html + "</div> <br/> <label>Admin status :</label> <input type='radio' name='admin' value='true'> true <input type='radio' name='admin' value='false' checked> false <br/><input type=\"button\" id=\"submitbtn\" value=\"Submit\"/> <input type=\"button\" id=\"cancel\" value=\"Cancel\"/> <br/></form>";
+        $("#popupform").html(html); // Setting the html of the popup form div
+        $("#popupform").css({"display":"block", "color":"#000000"});
+        $("#defaultdisplay").hide(); // Hiding the default page view
+        });
+      });
+    });
+                                          
+
+  .jumbotron.text-center
+    .container-fluid.text-center
+      #defaultdisplay(style='display:block;')
+        p#p1 hello #{title} 
+        .row
+          button.btn.btn-info.btn-lg(type='button', data-toggle='modal', data-target='#addUser') Add User
+          // Modal
+          #addUser.modal.fade(role='dialog')
+            .modal-dialog
+              // Modal content
+              .modal-content
+                .modal-header
+                  button.close(type='button', data-dismiss='modal') ×
+                  h4.modal-title Modal Header
+                .modal-body
+                  .container-fluid.text-center
+                    h2(color='#000000') New User Registration
+                    form.form-horizontal(method='POST' action='/db/users/create?token='+token)
+                      .form-group
+                        label.control-label.col-sm-4(for='name') Name:
+                        .col-sm-8
+                          input#name.form-control(type='text', placeholder='Enter name', name='name')
+                      .form-group
+                        label.control-label.col-sm-4(for='username') Username:
+                        .col-sm-8
+                          input#username.form-control(type='text', placeholder='Enter username', name='username')
+                      .form-group
+                        label.control-label.col-sm-4(for='authorities') Authorities:
+                        .col-sm-8
+                          #authorities.form-control
+                      .form-group
+                        .col-sm-offset-2.col-sm-10
+                          button.btn.btn-default(type='submit') Submit
+                .modal-footer
+                  button.btn.btn-default(type='button', data-dismiss='modal') Close
+          button.btn-link(id="delglyph") Delete Selected
+        table.table.table-bordered(id="user_table")      
+          thead
+            tr
+              th 
+                input.check(type='checkbox', id='cb_all')
+              th User
+              th Mobile
+              th Authorities
+              th Admin
+              th Actions
+          tbody
+            each user, index in user_list
+              tr(id="tr_"+index)
+                td 
+                  input.check(type='checkbox', value=user.id, id='cb_'+index, class='cb')
+                td(id="name_"+index) #{user.name}
+                td(id="mobile_"+index) #{user.mobileNo}
+                td(id="authorities_"+index)
+                  ul
+                  each authority in user.authorities
+                    li=authority.name
+                td(id="su_"+index) #{user.superadmin}
+                td 
+                  button.btn-link.span.glyphicon.glyphicon-pencil(id="editglyph_"+index)
+                  button.btn-link.span.glyphicon.glyphicon-floppy-disk(id="saveglyph_"+index style='display: none;')
+                  button.btn-link.span.glyphicon.glyphicon-trash(id="deleteglyph_"+index)
+                  .userid(id="id_"+index style='display: none;') #{user.id}
